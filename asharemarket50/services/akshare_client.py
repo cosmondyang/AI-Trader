@@ -4,19 +4,24 @@ from __future__ import annotations
 import importlib
 import time
 from pathlib import Path
+from types import ModuleType
 from typing import Dict, Iterable, Optional
 
 import pandas as pd
 
 from ..configs.settings import Settings
 
-spec = importlib.util.find_spec("akshare")
-if spec is None:  # pragma: no cover - runtime guard
-    raise RuntimeError(
-        "akshare is required for the CSI 50 simulator. Install it with `pip install akshare`."
-    )
 
-ak = importlib.import_module("akshare")
+def _resolve_akshare() -> ModuleType | None:
+    """Return the ``akshare`` module if installed, otherwise ``None``."""
+
+    spec = importlib.util.find_spec("akshare")
+    if spec is None:  # pragma: no cover - environment dependent
+        return None
+    return importlib.import_module("akshare")
+
+
+_AKSHARE_MODULE = _resolve_akshare()
 
 
 class AKShareUnavailable(RuntimeError):
@@ -26,10 +31,20 @@ class AKShareUnavailable(RuntimeError):
 class AKShareClient:
     """Client responsible for downloading and caching intraday OHLCV data."""
 
-    def __init__(self, settings: Optional[Settings] = None, rate_limit: float = 0.0) -> None:
+    def __init__(
+        self,
+        settings: Optional[Settings] = None,
+        rate_limit: float = 0.0,
+        module: ModuleType | None = None,
+    ) -> None:
         self.settings = settings or Settings()
         self.cache_dir = self.settings.ensure_cache()
         self.rate_limit = rate_limit
+        self._ak = module or _AKSHARE_MODULE
+        if self._ak is None:
+            raise RuntimeError(
+                "akshare is required for the CSI 50 simulator. Install it with `pip install akshare`."
+            )
 
     def _cache_path(self, symbol: str, trade_date: str, period: str) -> Path:
         safe_symbol = symbol.replace("/", "_").replace(":", "_")
@@ -68,7 +83,7 @@ class AKShareClient:
         start = f"{trade_date} 09:30:00"
         end = f"{trade_date} 15:00:00"
         try:
-            dataset = ak.stock_zh_a_hist_min_em(
+            dataset = self._ak.stock_zh_a_hist_min_em(
                 symbol=symbol,
                 period=period,
                 start_date=start,

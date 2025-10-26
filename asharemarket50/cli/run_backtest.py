@@ -10,6 +10,7 @@ import pandas as pd
 
 from ..agents import CoordinatorConfig, EnsembleCoordinator, AgentSpec
 from ..core.backtester import Backtester, AllocationPlanner
+from ..core.performance import summarize_performance
 from ..core.data_feed import DataFeed
 from ..core.portfolio import PortfolioState
 
@@ -85,6 +86,26 @@ def main(argv: Iterable[str] | None = None) -> None:
     result = backtester.run(dates, planner)
     print("Equity curve:")
     print(result.equity_curve)
+
+    summary = summarize_performance(result.equity_curve)
+    print("\nPerformance summary:")
+    print(
+        json.dumps(
+            {
+                "total_return": summary.total_return,
+                "annualized_return": summary.annualized_return,
+                "volatility": summary.volatility,
+                "sharpe_ratio": summary.sharpe_ratio,
+                "max_drawdown": summary.max_drawdown,
+                "max_drawdown_window": {
+                    "start": summary.max_drawdown_start,
+                    "end": summary.max_drawdown_end,
+                },
+            },
+            indent=2,
+        )
+    )
+
     print("\nOrders executed:")
     for order in result.orders:
         print(order)

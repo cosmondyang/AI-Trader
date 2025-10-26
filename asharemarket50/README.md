@@ -51,10 +51,17 @@ repository without name clashes.
 ## 🚀 Quick start
 
 1. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-   The package requires `akshare`, `pandas`, and `tabulate`. AKShare performs
+   - **Inside this monorepo**
+     ```bash
+     pip install -r requirements.txt
+     ```
+   - **As a standalone package**
+     ```bash
+     cd asharemarket50
+     pip install -e .
+     ```
+
+   The module requires `akshare`, `pandas`, and `tabulate`. AKShare performs
    live HTTP requests — make sure outbound network access is available when
    fetching data.
 
@@ -131,6 +138,25 @@ repository without name clashes.
 
 ---
 
+## 🔁 How it differs from the NASDAQ simulator
+
+| Feature | NASDAQ Arena (original) | AShareMarket50 |
+| --- | --- | --- |
+| Market coverage | NASDAQ 100 (US) | CSI 50 (A-share) |
+| Data provider | Alpha Vantage + Jina | AKShare intraday (5-minute) |
+| Execution mode | Historical replay, MCP live orchestration | Historical replay with T+1 settlement |
+| Tooling | MCP tool servers (trade, price, search, math) | Lightweight coordinator + pluggable LLM callback |
+| Reporting | HTML leaderboard & calculate_performance.py | 📈 Built-in performance summary (total/annualized return, Sharpe, drawdown) |
+
+The A-share module focuses on reproducible backtests and prompt payloads for
+domestic exchanges. It reuses the upstream layout (agents/configs/core/docs)
+but swaps data providers and execution rules to respect the T+1 constraint. To
+parity-match the U.S. benchmark arena, we added analytics in `core.performance`
+so every run emits the same quality of risk/return diagnostics that the NASDAQ
+toolchain computes via `calculate_performance.py` and feeds into its leaderboard.
+
+---
+
 ## ❓ FAQ
 
 - **Does this module trade live capital?**
@@ -159,6 +185,21 @@ repository without name clashes.
 - Add unit tests under `asharemarket50/tests/` to validate allocation parsers and
   execution logic.
 - Connect visual dashboards or notebooks that consume the equity curve JSON.
+
+---
+
+## 🧩 Coexistence & isolation
+
+- The package exports its public API lazily, so importing `asharemarket50` does
+  not alter the surrounding project nor require optional dependencies until you
+  actually instantiate the AKShare client or data feed.
+- Installing the package with `pip install -e asharemarket50` registers the CLI
+  entry point `ashare50-backtest` without touching the original (NASDAQ-focused)
+  code paths in this repository.
+- If you want to spin out a dedicated repository, copy the entire
+  `asharemarket50/` directory — the included `pyproject.toml` already contains
+  the metadata and dependency declarations required by most Python packaging
+  tooling.
 
 If you need additional automation (calendar ingestion, richer risk management,
 visualisation), open an issue or drop a note in the README — the package is

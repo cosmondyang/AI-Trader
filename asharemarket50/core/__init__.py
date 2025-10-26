@@ -4,6 +4,11 @@ from .backtester import Backtester, BacktestResult
 from .data_feed import DataFeed
 from .indicators import IndicatorLibrary
 from .portfolio import PortfolioState
+from .performance import (
+    PerformanceSummary,
+    compute_daily_returns,
+    summarize_performance,
+)
 
 __all__ = [
     "Backtester",
@@ -11,4 +16,7 @@ __all__ = [
     "DataFeed",
     "IndicatorLibrary",
     "PortfolioState",
+    "PerformanceSummary",
+    "compute_daily_returns",
+    "summarize_performance",
 ]
