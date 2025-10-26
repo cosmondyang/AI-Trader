@@ -1,5 +1,17 @@
-"""Utilities for the AShareMarket50 multi-agent arena."""
+"""CSI 50 A-share multi-agent trading simulator package."""
 
-from .pipeline import prepare_prompt_payload  # noqa: F401
+from .agents import AgentSpec, CoordinatorConfig, EnsembleCoordinator
+from .core import Backtester, BacktestResult, DataFeed, IndicatorLibrary, PortfolioState
+from .services import AKShareClient
 
-__all__ = ["prepare_prompt_payload"]
+__all__ = [
+    "AgentSpec",
+    "CoordinatorConfig",
+    "EnsembleCoordinator",
+    "Backtester",
+    "BacktestResult",
+    "DataFeed",
+    "IndicatorLibrary",
+    "PortfolioState",
+    "AKShareClient",
+]

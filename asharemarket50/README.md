@@ -1,169 +1,167 @@
-# 🇨🇳 AShareMarket50 多智能体交易场 README
+# 🇨🇳 AShareMarket50 — CSI 50 Multi-Agent Simulator
 
-> **目标**：在现有 `AI-Trader` 架构上快速搭建一个支持中证 50 的多模型问答竞赛版本，提供 5 分钟级别的日内数据、技术指标计算工具以及 Prompt 模板，做到“拷贝即用，快速跑通”。
+The **asharemarket50** package is a self-contained project that mirrors the
+capabilities of the original AI-Trader arena while specialising in the CSI 50
+(A-share) universe. It bundles data acquisition powered by [AKShare], a
+T+1-compliant backtesting engine, prompt scaffolding for multi-model
+collaboration, and a CLI that can replay any date range with either heuristic or
+LLM-driven agents.
+
+> ✅ The project focuses on **simulation**. No real-money execution is included.
 
 ---
 
-## 🧱 目录结构
+## 🧱 Project layout
 
 ```
 asharemarket50/
-├── README.md                         # 当前说明文档
-├── __init__.py                       # 包初始化
-├── data_loader.py                    # 5 分钟级数据加载与校验
-├── indicators.py                     # MACD / 布林带 / RSI / KDJ 指标函数
-├── pipeline.py                       # 数据汇总、指标计算与 Prompt Payload 生成
-├── universe_csi50.json               # 中证 50 股票列表
-└── prompts/
-    └── a50_agent_prompt.md           # 面向模型的问答模板示例
+├── agents/                     # LLM policies, ensemble coordinator, prompt templates
+│   ├── __init__.py
+│   ├── coordinator.py           # Multi-agent voting and risk clipping
+│   ├── policy.py                # Prompt rendering, response parsing
+│   └── prompts/
+│       └── csi50_multi_agent_prompt.md
+├── cli/
+│   └── run_backtest.py          # Command line entry point for batch simulations
+├── configs/
+│   ├── __init__.py
+│   ├── settings.py              # Cache folders & default configuration
+│   └── universe_csi50.json      # CSI 50 constituents
+├── core/
+│   ├── __init__.py
+│   ├── backtester.py            # T+1 execution loop & accounting
+│   ├── data_feed.py             # Data shaping + indicator enrichment
+│   ├── indicators.py            # MACD, Bollinger Bands, RSI, KDJ
+│   └── portfolio.py             # Position & cash tracking
+├── docs/
+├── services/
+│   ├── __init__.py
+│   └── akshare_client.py        # Intraday downloader with on-disk cache
+├── tests/                       # Hooks for future unit tests
+├── __init__.py
+└── README.md
 ```
+
+The directory tree mirrors the structure of the upstream project (configs,
+services, agents, CLI, docs, tests) so the module can be published as a standalone
+repository without name clashes.
 
 ---
 
-## 🚀 快速开始（建议流程）
+## 🚀 Quick start
 
-1. **复制目录**：将 `asharemarket50/` 放入你的项目根目录，保持与现有美股版本平级。
-2. **准备环境**：
-   - 安装依赖：`pip install -r requirements.txt`
-   - 若需要新增库（如 `akshare`、`tushare`），请在根目录 `requirements.txt` 中补充。
-3. **填充数据**：按照下文规范写入 5 分钟线 CSV；支持本地文件或 API 拉取。
-4. **执行流水线**：
+1. **Install dependencies**
    ```bash
-   python -m asharemarket50.pipeline --date 2025-01-10 --data-root data/ashare/5min --output tmp/a50_payload.json
+   pip install -r requirements.txt
    ```
-   - 该命令会读取中证 50 全部股票的当日 5 分钟线，计算指标并输出给 Agent 使用的 JSON。
-5. **对接主程序**：在原有调度中，引入 `asharemarket50.pipeline.prepare_prompt_payload` 生成多模型输入。
-6. **多 Agent Prompt**：为每个模型复制 `prompts/a50_agent_prompt.md` 并按需微调语气、风格。
+   The package requires `akshare`, `pandas`, and `tabulate`. AKShare performs
+   live HTTP requests — make sure outbound network access is available when
+   fetching data.
+
+2. **Run a demo backtest**
+   ```bash
+   python -m asharemarket50.cli.run_backtest --start 2024-01-08 --end 2024-01-15 --mode demo
+   ```
+   The demo mode uses an indicator-driven heuristic planner so it can operate
+   without LLM credentials. Results print to STDOUT and can optionally be saved
+   with `--output path/to/result.json`.
+
+3. **Switch to LLM agents**
+   - Implement a callback that invokes your preferred models (e.g. OpenAI,
+     DeepSeek) and returns a JSON payload such as:
+     ```json
+     {
+       "allocations": {
+         "sh600519": 0.12,
+         "sz000858": 0.10,
+         "sh600036": 0.08
+       }
+     }
+     ```
+   - Update `create_llm_coordinator` in `cli/run_backtest.py` or wire the
+     `EnsembleCoordinator` directly inside your orchestration layer.
+   - Each agent receives the rendered prompt defined in
+     `agents/prompts/csi50_multi_agent_prompt.md`, which already embeds
+     full-day 5-minute bars plus MACD, Bollinger Bands, RSI, and KDJ values.
+
+4. **Inspect cached market data**
+   - AKShare downloads are cached to `~/.asharemarket50/cache/`. Delete files in
+     that directory to force a refresh, or pass `refresh=True` to the client.
 
 ---
 
-## 📊 数据规范
+## 📊 Data workflow
 
-### 1. 文件命名
+1. **Universe definition**
+   `configs/universe_csi50.json` lists all CSI 50 constituents with exchange
+   prefixes. Utilities in `configs.universe` expose helper classes to iterate
+   over symbols and feed them into AKShare.
 
-```
-<data_root>/<symbol>/<trade_date>.csv
-例：data/ashare/5min/600519.SH/2025-01-10.csv
-```
+2. **AKShare integration**
+   - `services.akshare_client.AKShareClient.fetch_intraday(symbol, date)` pulls
+     5-minute bars from `stock_zh_a_hist_min_em` and stores a normalised CSV.
+   - A simple rate limiter and cache guard protect against repeated downloads.
 
-### 2. CSV 字段要求
+3. **Indicator enrichment**
+   - `core.indicators.IndicatorLibrary` appends MACD (DIF/DEA/HIST), Bollinger
+     Bands, RSI, and KDJ columns to each DataFrame.
+   - `core.data_feed.DataFeed.build_prompt_payload()` returns JSON-ready records
+     so prompts can present full intraday context to each model.
 
-| 列名          | 类型      | 说明                               |
-|---------------|-----------|------------------------------------|
-| `timestamp`   | str/datetime | 5 分钟级时间戳，格式 `YYYY-MM-DD HH:MM:SS` |
-| `open`        | float     | 开盘价                             |
-| `high`        | float     | 最高价                             |
-| `low`         | float     | 最低价                             |
-| `close`       | float     | 收盘价                             |
-| `volume`      | float/int | 成交量（手）                       |
-| `amount`      | float     | 成交额（人民币）                   |
-
-> ⚠️ **注意**：请使用复权数据或在 Pipeline 中自行做前复权，以保证指标连续性。
-
-### 3. 数据获取建议
-
-- **TuShare Pro**：`tushare.pro_api(token)` 获取 `ts_code`, `freq='5min'`。
-- **AkShare**：`ak.stock_zh_a_minute(symbol, period='5')`。
-- **申万/聚宽**：如使用其他券商数据源，请在 `data_loader.py` 中自定义转换。
-
-在 `pipeline.py` 中预留了 `--source tushare` 选项，用于后续扩展自动抓取逻辑（默认读取本地 CSV）。
+4. **Backtesting**
+   - `core.backtester.Backtester` simulates T+1 behaviour: allocations proposed
+     on `D` execute at the open of `D+1`, and equity is marked on the close of
+     `D+1`.
+   - Portfolio valuation and cash accounting are handled by
+     `core.portfolio.PortfolioState`.
 
 ---
 
-## 🛠️ 指标函数
+## 🤖 Multi-agent orchestration
 
-`indicators.py` 提供以下函数，可直接 import 使用：
-
-- `compute_macd(df, fast=12, slow=26, signal=9)`
-- `compute_bollinger_bands(df, window=20, num_std=2)`
-- `compute_rsi(df, period=14)`
-- `compute_kdj(df, n=9, k_period=3, d_period=3)`
-
-所有函数均返回带新列的数据副本，默认输入 `df` 必须包含 `close / high / low` 列。若需要更多指标，请在同文件继续扩展。
-
----
-
-## 🧠 Prompt 设计
-
-- `prompts/a50_agent_prompt.md` 提供了一个**多模态问答模板**，其中会注入：
-  - 全量 5 分钟 K 线序列（JSON/Markdown 表格二选一，可在 `pipeline.py` 中设置）
-  - 四大技术指标计算结果（末值 + 统计摘要）
-  - 资金持仓、风险约束、T+1 限制说明
-- 建议为每个模型复制一份模板，根据模型偏好调整语气或策略倾向。
-- Prompt 核心段落示例：
-  ```text
-  ### 600519.SH — 贵州茅台
-  - 昨日收盘：1785.34
-  - 5min 序列（09:30-15:00）：...
-  - MACD(12,26,9)：DIF=..., DEA=..., HIST=...
-  - 布林带(20,2)：中轨=..., 上轨=..., 下轨=...
-  - RSI14：...
-  - KDJ：K=..., D=..., J=...
-  ```
+- `agents.policy.AgentPolicy` loads prompt templates, renders context
+  (portfolio snapshot, risk limits, intraday data), calls the supplied LLM, and
+  extracts allocations from any JSON block in the response.
+- `agents.coordinator.EnsembleCoordinator` averages proposals from multiple
+  `AgentPolicy` instances, clips positions against `risk_limits`, and produces a
+  consolidated weight vector for the backtester.
+- The default prompt template encourages agents to output both qualitative
+  analysis and a machine-readable allocation block. Customise the file or point
+  each `AgentSpec` to its own prompt via the `prompt_path` attribute.
 
 ---
 
-## 🔄 与主项目集成建议
+## ❓ FAQ
 
-| 集成点 | 操作 | 参考文件 |
-|--------|------|----------|
-| 市场配置 | 在 `configs/default_config.json` 中新增 `market: ashare` | `configs/README.md` |
-| Agent 注册 | 在 `main.py` 的 Agent 列表中增加 `ashare` 模型配置 | `main.py` |
-| 工具层 | 基于 `agent_tools/tool_get_price_local.py` 新建 A 股版工具 | `agent_tools/` |
-| 交易执行 | 复制 `tool_trade.py`，实现 T+1 限制与涨跌停校验 | `agent_tools/` |
-| 绩效展示 | 在 `docs/` 下新增 A 股排行榜页面 | `docs/` |
+- **Does this module trade live capital?**
+  No. The toolkit is entirely simulation-oriented. Hook it to a broker or mock
+  execution engine if you require paper trading.
 
----
+- **Can every model be evaluated on a fixed date?**
+  Yes. Run the CLI with `--start YYYY-MM-DD --end YYYY-MM-DD` (a single date) or
+  provide a range. The backtester automatically chains sessions, executes
+  decisions on T+1, and records equity plus orders so you can compare agents on
+  the same historical windows.
 
-## 📦 输出结构
-
-默认输出 `tmp/a50_payload.json`，格式如下：
-
-```json
-{
-  "trade_date": "2025-01-10",
-  "universe": ["600519.SH", "600036.SH", ...],
-  "bars": {
-    "600519.SH": {
-      "meta": {"industry": "白酒", "name": "贵州茅台"},
-      "bars": [
-        {"timestamp": "2025-01-09 09:30:00", "open": 1783.0, "high": 1785.0, ...},
-        ...
-      ],
-      "indicators": {
-        "macd": {"dif": 1.23, "dea": 0.98, "hist": 0.25},
-        "bollinger": {"upper": 1805.1, "mid": 1780.2, "lower": 1755.3},
-        "rsi": 56.7,
-        "kdj": {"k": 62.3, "d": 58.1, "j": 70.7}
-      }
-    }
-  }
-}
-```
-
-该 JSON 可直接喂给多 Agent Prompt（或进一步裁剪为 Markdown 表格）。
+- **What else do you need from me?**
+  - AKShare-compatible network access (no token required) or alternative data
+    credentials if you prefer a different provider.
+  - Optional: a curated trading calendar if you want to avoid relying on the
+    generic business-day index.
+  - Optional: fundamental metadata (industries, concepts) to enrich prompts.
 
 ---
 
-## 🤝 需要你提供的内容
+## 📌 Next steps
 
-1. **行情 API Token**：若需自动拉取，请提供 TuShare / AkShare / 雪球等接口授权。
-2. **交易日历**：若已有可靠 A 股交易日历文件，请共享，以便我们在 Pipeline 内做校验。
-3. **行业/主题标签**：如果希望在 Prompt 中展示行业分类，请提供映射表，格式 `symbol -> {industry, concept}`。
-4. **实盘/仿真接口**：若最终要接券商仿真或模拟盘，请告知 API 规范（REST / WebSocket）。
-5. **运行资源**：若需在云端跑，提供服务器配置或容器镜像需求，我们可以在 README 中补充部署说明。
+- Wire in your own LLM callback and agent roster.
+- Extend `IndicatorLibrary` with custom factors (e.g. VWAP, ATR).
+- Add unit tests under `asharemarket50/tests/` to validate allocation parsers and
+  execution logic.
+- Connect visual dashboards or notebooks that consume the equity curve JSON.
 
-> ✅ 收到以上信息后，我们可以快速补齐自动拉取数据、回测、可视化等扩展能力，确保“开箱即跑”。
+If you need additional automation (calendar ingestion, richer risk management,
+visualisation), open an issue or drop a note in the README — the package is
+structured for fast iteration.
 
----
-
-## 🧭 下一步建议
-
-- [ ] 在 `pipeline.py` 中实现 `fetch_from_tushare()`，直接落地自动抓取流程。
-- [ ] 扩展 `indicators.py` 支持成交量指标（OBV、VOL Ratio）。
-- [ ] 根据多 Agent 策略风格，分别定制 Momentum / Mean Reversion / Macro 版 Prompt。
-- [ ] 与原项目一致，编写 `docs/ashare_market_walkthrough.md` 展示每日执行日志。
-
----
-
-如需进一步协作或定制，请随时留言，我们会第一时间响应并补充所需脚本/说明，帮助你尽快完成一个“能跑、能看、能迭代”的中证 50 多模型竞赛版本。💪
+[AKShare]: https://github.com/akfamily/akshare
