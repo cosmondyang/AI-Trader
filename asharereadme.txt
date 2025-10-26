@@ -61,3 +61,15 @@
 3. **自动化**：可设置每日定时任务（crontab/CI）执行仿真并生成日报。
 
 按照以上步骤推进，即可在最短周期内完成 A 股中证50 多 Agent 模拟盘的初版实现，并在此基础上迭代策略与工具能力。
+
+---
+
+## 附：AShareMarket50 模块
+
+- 我们在仓库根目录新增了 `asharemarket50/`，内含：
+  - `README.md`：A50 多智能体版本的快速落地指南、数据规范、集成说明。
+  - `pipeline.py`：可直接读取 5 分钟线并输出带 MACD / 布林带 / RSI / KDJ 的 Prompt Payload。
+  - `indicators.py`：四大指标函数，方便二次开发。
+  - `prompts/a50_agent_prompt.md`：多模型共享的系统提示词模板。
+  - `universe_csi50.json`：中证 50 成分股清单（可按最新编制更新）。
+- 如需扩展自动拉取行情、接入更多指标或回测，请参考 `README.md` 中的待办列表并与我们同步所需支持。
