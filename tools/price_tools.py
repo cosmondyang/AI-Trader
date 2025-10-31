@@ -4,7 +4,7 @@ load_dotenv()
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import sys
 
 # 将项目根目录加入 Python 路径，便于从子目录直接运行本文件
@@ -95,7 +95,7 @@ def get_open_prices(today_date: str, symbols: List[str], merged_path: Optional[s
 
     return results
 
-def get_yesterday_open_and_close_price(today_date: str, symbols: List[str], merged_path: Optional[str] = None) -> tuple[Dict[str, Optional[float]], Dict[str, Optional[float]]]:
+def get_yesterday_open_and_close_price(today_date: str, symbols: List[str], merged_path: Optional[str] = None) -> Tuple[Dict[str, Optional[float]], Dict[str, Optional[float]]]:
     """从 data/merged.jsonl 中读取指定日期与股票的昨日买入价和卖出价。
 
     Args:
@@ -260,7 +260,7 @@ def get_today_init_position(today_date: str, modelname: str) -> Dict[str, float]
     
     return latest_positions
 
-def get_latest_position(today_date: str, modelname: str) -> Dict[str, float]:
+def get_latest_position(today_date: str, modelname: str) -> Tuple[Dict[str, float], int]:
     """
     获取最新持仓。从 ../data/agent_data/{modelname}/position/position.jsonl 中读取。
     优先选择当天 (today_date) 中 id 最大的记录；
@@ -273,7 +273,7 @@ def get_latest_position(today_date: str, modelname: str) -> Dict[str, float]:
     Returns:
         (positions, max_id):
           - positions: {symbol: weight} 的字典；若未找到任何记录，则为空字典。
-          - max_id: 选中记录的最大 id；若未找到任何记录，则为 -1。
+          - max_id: 选中记录的最大 id；若未找到任何记录，则为 -1.
     """
     base_dir = Path(__file__).resolve().parents[1]
     position_file = base_dir / "data" / "agent_data" / modelname / "position" / "position.jsonl"

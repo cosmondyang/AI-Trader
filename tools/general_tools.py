@@ -2,11 +2,14 @@
 import os
 import json
 from pathlib import Path
+from typing import Any
 from dotenv import load_dotenv
 load_dotenv()
 
 def _load_runtime_env() -> dict:
     path = os.environ.get("RUNTIME_ENV_PATH")
+    if path is None:
+        return {}
     try:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
@@ -25,12 +28,18 @@ def get_config_value(key: str, default=None):
         return _RUNTIME_ENV[key]
     return os.getenv(key, default)
 
-def write_config_value(key: str, value: any):
+def write_config_value(key: str, value: Any):
+    path = os.environ.get("RUNTIME_ENV_PATH")
+    if path is None:
+        print(f"⚠️  WARNING: RUNTIME_ENV_PATH not set, config value '{key}' not persisted")
+        return
     _RUNTIME_ENV = _load_runtime_env()
     _RUNTIME_ENV[key] = value
-    path = os.environ.get("RUNTIME_ENV_PATH")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(_RUNTIME_ENV, f, ensure_ascii=False, indent=4)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(_RUNTIME_ENV, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"❌ Error writing config to {path}: {e}")
 
 def extract_conversation(conversation: dict, output_type: str):
     """Extract information from a conversation payload.

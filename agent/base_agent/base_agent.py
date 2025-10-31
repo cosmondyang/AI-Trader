@@ -66,6 +66,7 @@ class BaseAgent:
         max_retries: int = 3,
         base_delay: float = 0.5,
         openai_base_url: Optional[str] = None,
+        openai_api_key: Optional[str] = None,
         initial_cash: float = 10000.0,
         init_date: str = "2025-10-13"
     ):
@@ -82,6 +83,7 @@ class BaseAgent:
             max_retries: Maximum retry attempts
             base_delay: Base delay time for retries
             openai_base_url: OpenAI API base URL
+            openai_api_key: OpenAI API key
             initial_cash: Initial cash amount
             init_date: Initialization date
         """
@@ -101,7 +103,14 @@ class BaseAgent:
         self.base_log_path = log_path or "./data/agent_data"
         
         # Set OpenAI configuration
-        self.openai_base_url = openai_base_url or os.getenv("OPENAI_API_BASE")
+        if openai_base_url==None:
+            self.openai_base_url = os.getenv("OPENAI_API_BASE")
+        else:
+            self.openai_base_url = openai_base_url
+        if openai_api_key==None:
+            self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        else:
+            self.openai_api_key = openai_api_key
         
         # Initialize components
         self.client: Optional[MultiServerMCPClient] = None
@@ -138,20 +147,41 @@ class BaseAgent:
         """Initialize MCP client and AI model"""
         print(f"🚀 Initializing agent: {self.signature}")
         
-        # Create MCP client
-        self.client = MultiServerMCPClient(self.mcp_config)
+        # Validate OpenAI configuration
+        if not self.openai_api_key:
+            raise ValueError("❌ OpenAI API key not set. Please configure OPENAI_API_KEY in environment or config file.")
+        if not self.openai_base_url:
+            print("⚠️  OpenAI base URL not set, using default")
         
-        # Get tools
-        self.tools = await self.client.get_tools()
-        print(f"✅ Loaded {len(self.tools)} MCP tools")
+        try:
+            # Create MCP client
+            self.client = MultiServerMCPClient(self.mcp_config)
+            
+            # Get tools
+            self.tools = await self.client.get_tools()
+            if not self.tools:
+                print("⚠️  Warning: No MCP tools loaded. MCP services may not be running.")
+                print(f"   MCP configuration: {self.mcp_config}")
+            else:
+                print(f"✅ Loaded {len(self.tools)} MCP tools")
+        except Exception as e:
+            raise RuntimeError(
+                f"❌ Failed to initialize MCP client: {e}\n"
+                f"   Please ensure MCP services are running at the configured ports.\n"
+                f"   Run: python agent_tools/start_mcp_services.py"
+            )
         
-        # Create AI model
-        self.model = ChatOpenAI(
-            model=self.basemodel,
-            base_url=self.openai_base_url,
-            max_retries=3,
-            timeout=30
-        )
+        try:
+            # Create AI model
+            self.model = ChatOpenAI(
+                model=self.basemodel,
+                base_url=self.openai_base_url,
+                api_key=self.openai_api_key,
+                max_retries=3,
+                timeout=30
+            )
+        except Exception as e:
+            raise RuntimeError(f"❌ Failed to initialize AI model: {e}")
         
         # Note: agent will be created in run_trading_session() based on specific date
         # because system_prompt needs the current date and price information
